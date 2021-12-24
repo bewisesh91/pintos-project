@@ -212,6 +212,8 @@ thread_create (const char *name, int priority,
 
     /* Add to run queue. */
     thread_unblock (t);
+    /* 만약 새로 만든 thread의 우선순위가 현재 실행되고 있는 thread보다 높으면 yields*/
+    if(check_preemption()) thread_yield();
 
     return tid;
 }
@@ -321,6 +323,7 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
     thread_current ()->priority = new_priority;
+    if(check_preemption()) thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -677,7 +680,7 @@ void test_max_priority(void){
 //     }
 // }
 
-// bool check_preemption(){
-//     if(list_empty(&ready_list)) return false;
-//     return list_entry(list_front(&ready_list), struct thread, elem) -> priority > thread_current() -> priority;
-// }
+bool check_preemption(){
+    if(list_empty(&ready_list)) return false;
+    return list_entry(list_front(&ready_list), struct thread, elem) -> priority > thread_current() -> priority;
+}

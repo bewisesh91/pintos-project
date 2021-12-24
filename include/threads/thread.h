@@ -158,7 +158,7 @@ bool thread_compare_priority(const struct list_elem *a,
                               const struct list_elem *b,
                               void *aux UNUSED); // 스레드의 우선순위 비교
 void test_max_priority(void); // 첫번째 스레드가 cpu 점유 중인 스레드 보다 우선순위가 높으면 cpu 점유를 양보하는 함수
-// bool check_preemption();
+bool check_preemption();
 void do_iret (struct intr_frame *tf);
 
 #endif /* threads/thread.h */
