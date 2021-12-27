@@ -421,6 +421,9 @@ init_thread (struct thread *t, const char *name, int priority) {
     t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
     t->priority = priority;
     t->magic = THREAD_MAGIC;
+    t->init_priority = priority;
+    t->wait_on_lock = NULL;
+    list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -664,10 +667,11 @@ thread_compare_priority(const struct list_elem *a, const struct list_elem *b, vo
 
 }
 
-//첫번째 스레드가 cpu 점유 중인 스레드 보다 우선순위가 높으면 cpu 점유를 양보하는 함수
-void test_max_priority(void){
+// 첫번째 스레드가 cpu 점유 중인 스레드 보다 우선순위가 높으면 cpu 점유를 양보하는 함수
+void 
+test_max_priority(void){
     struct thread *cur = thread_current();
-    if (thread_compare_priority(list_front(&ready_list), cur, 0)){
+    if (!list_empty(&ready_list) && thread_compare_priority(list_front(&ready_list), cur, 0)){
         thread_yield();
     }
 }
@@ -683,4 +687,15 @@ void test_max_priority(void){
 bool check_preemption(){
     if(list_empty(&ready_list)) return false;
     return list_entry(list_front(&ready_list), struct thread, elem) -> priority > thread_current() -> priority;
+}
+
+void donate_priority(){
+    int depth;
+    struct thread *cur = thread_current();
+    for(depth = 0; depth < 8; depth++){
+        if(!cur->wait_on_lock) break;
+        struct thread *holder = cur->wait_on_lock->holder;
+        holder->priority = cur->priority;
+        cur = holder;
+    }
 }

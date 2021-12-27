@@ -96,6 +96,14 @@ struct thread {
     struct list_elem elem;              /* List element. */
     int64_t wakeup_tick;                /* 깨어날 시간 저장 */
 
+    /* variable for donation*/
+    int init_priority; //스레드가 priority를 양도받았다가 다시 반납할 때 원래의 priority를 복원할 수 있도록 고유의 priority 값을 저장
+    struct lock *wait_on_lock; // 스레드가 현재 얻기 위해 기다리고 있는 lock으로 스레드는 이 lock이 release되기를 기다린다.
+    struct list donations; // 자신에게 priority를 나누어준 스레드들의 리스트
+    struct list_elem donation_elem; // list donations을 관리하기 위한 element
+    
+    
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint64_t *pml4;                     /* Page map level 4 */
@@ -160,6 +168,8 @@ bool thread_compare_priority(const struct list_elem *a,
 void test_max_priority(void); // 첫번째 스레드가 cpu 점유 중인 스레드 보다 우선순위가 높으면 cpu 점유를 양보하는 함수
 bool check_preemption();
 void do_iret (struct intr_frame *tf);
+
+void donate_priority();
 
 #endif /* threads/thread.h */
 
