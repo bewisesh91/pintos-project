@@ -235,16 +235,9 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-	struct thread *cur = thread_current();
-	struct list_elem *e;
-	for (e = list_begin(&cur->donations); e!= list_end(&cur->donations); e = list_next(e)){
-		struct thread *t = list_entry(e, struct thread, elem);
-		if(t->wait_on_lock == lock){
-			list_remove(&t->donation_elem);
-		}
-	}
-	cur->priority = cur->init_priority;
-	
+	/*현재 이 lock을 사용하기 위해 나에게 prioirity를 빌려준 스레드들을 donation 리스트에서 제거하고, priority를 재설정*/
+	remove_with_lock(lock);
+	refresh_priority();
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
