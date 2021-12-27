@@ -169,7 +169,7 @@ void test_max_priority(void); // 첫번째 스레드가 cpu 점유 중인 스레
 bool check_preemption();
 void do_iret (struct intr_frame *tf);
 
-
+/* priority donation */
 void donate_priority();
 void remove_with_lock(struct lock *lock);
 void refresh_priority(void);

@@ -258,6 +258,23 @@ struct semaphore_elem {
 	struct semaphore semaphore;         /* This semaphore. */
 };
 
+
+bool cond_waiter_compare_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED){
+	struct semaphore_elem *a_sema = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *b_sema = list_entry(b, struct semaphore_elem, elem);
+	struct list *a_list = &(a_sema->semaphore.waiters);
+	struct list *b_list = &(b_sema->semaphore.waiters);
+	return list_entry(list_begin(a_list), struct thread, elem)->priority > list_entry(list_begin(b_list), struct thread, elem)->priority;
+	// struct semaphore_elem *l_sema = list_entry (l, struct semaphore_elem, elem);
+	// struct semaphore_elem *s_sema = list_entry (s, struct semaphore_elem, elem);
+
+	// struct list *waiter_l_sema = &(l_sema->semaphore.waiters);
+	// struct list *waiter_s_sema = &(s_sema->semaphore.waiters);
+
+	// return list_entry (list_begin (waiter_l_sema), struct thread, elem)->priority
+	// 	 > list_entry (list_begin (waiter_s_sema), struct thread, elem)->priority;
+}
+
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
    code to receive the signal and act upon it. */
@@ -298,7 +315,10 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+	// list_push_back (&cond->waiters, &waiter.elem);
+	list_insert_ordered(&cond->waiters, &waiter.elem, cond_waiter_compare_priority, 0);
+	//cond에는 무엇을 저장하는가?
+	//list_inseert_ordered의 정확한 작동원리
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -319,6 +339,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters))
+		list_sort(&cond->waiters, cond_waiter_compare_priority, 0);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
 }
