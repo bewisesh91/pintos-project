@@ -31,7 +31,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
-static struct list all_list;
+static struct list all_list; // 모든 thread를 넣기위한 list
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -306,7 +306,7 @@ thread_exit (void) {
     /* Just set our status to dying and schedule another process.
        We will be destroyed during the call to schedule_tail(). */
     intr_disable ();
-    list_remove(&thread_current()->allelem);
+    list_remove(&thread_current()->allelem); // 전부 사용한 thread는 all_list에서 제거
     do_schedule (THREAD_DYING);
     NOT_REACHED ();
 }
@@ -342,8 +342,10 @@ thread_set_priority (int new_priority) {
 int
 thread_get_priority (void) {
     enum intr_level old_level = intr_disable();
+
 	int ret = thread_current()->priority;
-	intr_set_level(old_level);
+	
+    intr_set_level(old_level);
 	return ret;
 }
 
@@ -354,7 +356,9 @@ thread_set_nice (int nice) {
     
     thread_current() -> nice = nice;
     mlfqs_calculate_priority(thread_current());
+
     if(check_preemption()) thread_yield();
+
     intr_set_level(old_level);
 }
 
@@ -450,7 +454,8 @@ init_thread (struct thread *t, const char *name, int priority) {
     t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
     t->priority = priority;
     t->magic = THREAD_MAGIC;
-    list_push_back(&all_list, &t->allelem);
+
+    list_push_back(&all_list, &t->allelem);     //새로 생성한 thread를 all_list에 넣는다. advanced
     t->init_priority = priority;
     t->wait_on_lock = NULL;
     list_init(&t->donations);
@@ -709,14 +714,6 @@ test_max_priority(void){
         thread_yield();
     }
 }
-// void
-// test_max_priority (void){
-//     if (!list_empty (&ready_list) &&
-//     thread_current ()->priority <
-//     list_entry (list_front (&ready_list), struct thread, elem)->priority){
-//     thread_yield ();
-//     }
-// }
 
 bool check_preemption(){
     if(list_empty(&ready_list)) return false;
@@ -769,7 +766,6 @@ void refresh_priority(){
 
 /* advance */
 
-
 void mlfqs_calculate_priority(struct thread *t){
     //priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
     if(t == idle_thread){
@@ -779,32 +775,33 @@ void mlfqs_calculate_priority(struct thread *t){
 }
 
 void mlfqs_calculate_recent_cpu(struct thread *t){
-    // recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
+    
     if(t == idle_thread){
         return;
     }
+    // recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
     t->recent_cpu = add_mixed (mult_fp (div_fp (mult_mixed (load_avg, 2), 
     add_mixed (mult_mixed (load_avg, 2), 1)), t->recent_cpu), t->nice);
 }
 void mlfqs_calculate_load_avg(void){
-    //load_avg = (59/60) * load_avg + (1/60) * ready_threads
+
     int ready_threads;
 
     if (thread_current () == idle_thread)
         ready_threads = list_size (&ready_list);
     else
         ready_threads = list_size (&ready_list) + 1;
-
+    //load_avg = (59/60) * load_avg + (1/60) * ready_threads
     load_avg = add_fp (mult_fp (div_fp (int_to_fp(59), int_to_fp(60)), load_avg), 
                     mult_mixed (div_fp (int_to_fp(1), int_to_fp(60)), ready_threads));
 }
-
+/* tick마다 current cpu의 recent_cpu를 1 증가 시킨다. */
 void mlfqs_increments_recent_cpu(void){
     if(thread_current() != idle_thread){
         thread_current()->recent_cpu = add_mixed (thread_current()->recent_cpu, 1);
     }
 }
-
+/* 모든 list를 돌면서 recent_cpu를 변경한다.*/
 void mlfqs_recalculate_recent_cpu(void){
     struct list_elem *e;
     for(e = list_begin(&all_list) ; e != list_end(&all_list); e = list_next(e)){
@@ -813,6 +810,7 @@ void mlfqs_recalculate_recent_cpu(void){
     }
 }
 
+/* 모든 list를 돌면서 priority를 변경시켜준다.*/
 void mlfqs_recalculate_priority(void){
     struct list_elem *e;
     for(e = list_begin(&all_list) ; e != list_end(&all_list); e = list_next(e)){
@@ -820,6 +818,18 @@ void mlfqs_recalculate_priority(void){
         mlfqs_calculate_priority(t);
     }
 }
+
+
+/***********************************************/
+/*           Fixed-point arithmetic            */
+/***********************************************/
+/* 
+    pintos에서는 1bit(부호), 17bit(정수부), 14bit(소수부)를 사용하는 고정 소수점 방식으로 실수를 계산한다.
+    그렇기 때문에, 정수와 실수의 계산을 할때에는 다른 연산 방법을 사용해야 한다.
+    x,y는 fixed_point num
+    n은 int
+    F는 1<<14
+*/
 
 int int_to_fp (int n) {
   return n * F;
@@ -865,43 +875,3 @@ int div_fp (int x, int y) {
 int div_mixed (int x, int n) {
   return x / n;
 }
-
-
-
-
-// void update_load_avg_and_recent_cpu(void){
-//     int ready_threads = list_size(&ready_list);
-//     struct thread *t;
-//     struct list_elem *e;
-
-//     //running 상태
-//     if(thread_current() != idle_thread){
-//         ready_threads += 1;
-//     }
-//     //recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
-//     //load_avg = (59/60) * load_avg + (1/60) * ready_threads
-//     load_avg = float_div_int(float_add_int(int_mul_float(59, load_avg), ready_threads), 60);
-//     for(e = list_begin(&ready_list) ; e != list_end(&ready_list); e = list_next(e)){
-//         t = list_entry(e, struct thread, elem);
-//         if(t != idle_thread){
-//             t->recent_cpu = float_add_int(float_mul_float(float_div_float(int_mul_float(2, load_avg), float_add_int(int_mul_float(2, load_avg), 1)), t->recent_cpu), t->nice);
-//         }
-//     }
-// }
-// void update_priority(){
-//     struct thread *t;
-//     struct list_elem *e;
-//     //priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
-//     for(e = list_begin(&ready_list) ; e != list_end(&ready_list); e = list_next(e)){
-//         t = list_entry(e, struct thread, elem);
-//         t->priority = float_sub_float(float_sub_float(float_add_int(0, PRI_MAX), float_div_int(t->recent_cpu, 4)), int_mul_float(2, float_add_int(0, t->nice))) / FRACTION;
-//         if(t->priority > PRI_MAX){
-//             t->priority = PRI_MIN;
-//         }else if(t->priority < PRI_MIN){
-//             t->priority = PRI_MIN;
-//         }
-//     }
-//     if(test_max_priority()){
-//         intr_yield_on_return();
-//     }
-// }

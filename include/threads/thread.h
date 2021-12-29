@@ -98,7 +98,7 @@ struct thread {
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct list_elem allelem;
+    struct list_elem allelem;           /* advanced scheduling */
     int64_t wakeup_tick;                /* 깨어날 시간 저장 */
 
     /* variable for donation*/
@@ -189,6 +189,7 @@ void mlfqs_increments_recent_cpu(void);
 void mlfqs_recalculate_recent_cpu(void);
 void mlfqs_recalculate_recent_cpu(void);
 
+/* fixed_point */
 int int_to_fp (int n);
 int fp_to_int (int x);
 int fp_to_int_round (int x);
