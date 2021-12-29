@@ -419,7 +419,7 @@ void
 list_insert_ordered (struct list *list, struct list_elem *elem,
 		list_less_func *less, void *aux) {
 	struct list_elem *e;
-
+	
 	ASSERT (list != NULL);
 	ASSERT (elem != NULL);
 	ASSERT (less != NULL);

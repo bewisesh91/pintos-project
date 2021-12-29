@@ -24,9 +24,14 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
+#define F (1 << 14)
+#define INT_MAX ((1 << 31) - 1)
+#define INT_MIN (-(1 << 31))
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -83,6 +88,7 @@ static tid_t allocate_tid (void);
 // Because the gdt will be setup after the thread_init, we should
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
+static int load_avg;
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -115,6 +121,7 @@ thread_init (void) {
     list_init (&ready_list);
     list_init (&destruction_req);
     list_init (&sleep_list); // assign1
+    list_init (&all_list); // advance
 
     /* Set up a thread structure for the running thread. */
     initial_thread = running_thread ();
@@ -134,6 +141,7 @@ thread_start (void) {
 
     /* Start preemptive thread scheduling. */
     intr_enable ();
+    load_avg = LOAD_AVG_DEFAULT;
 
     /* Wait for the idle thread to initialize idle_thread. */
     sema_down (&idle_started);
@@ -212,6 +220,7 @@ thread_create (const char *name, int priority,
 
     /* Add to run queue. */
     thread_unblock (t);
+
     /* 만약 새로 만든 thread의 우선순위가 현재 실행되고 있는 thread보다 높으면 yields*/
     if(check_preemption()) thread_yield();
 
@@ -297,6 +306,7 @@ thread_exit (void) {
     /* Just set our status to dying and schedule another process.
        We will be destroyed during the call to schedule_tail(). */
     intr_disable ();
+    list_remove(&thread_current()->allelem);
     do_schedule (THREAD_DYING);
     NOT_REACHED ();
 }
@@ -322,6 +332,7 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
+    if(thread_mlfqs) return;
     thread_current () -> init_priority = new_priority;
     refresh_priority();
     if(check_preemption()) thread_yield();
@@ -330,34 +341,51 @@ thread_set_priority (int new_priority) {
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) {
-    return thread_current ()->priority;
+    enum intr_level old_level = intr_disable();
+	int ret = thread_current()->priority;
+	intr_set_level(old_level);
+	return ret;
 }
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) {
-    /* TODO: Your implementation goes here */
+thread_set_nice (int nice) {
+    enum intr_level old_level = intr_disable();
+    
+    thread_current() -> nice = nice;
+    mlfqs_calculate_priority(thread_current());
+    if(check_preemption()) thread_yield();
+    intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) {
     /* TODO: Your implementation goes here */
-    return 0;
+    enum intr_level old_level = intr_disable();
+    int nice = thread_current() -> nice;
+    intr_set_level(old_level);
+    return nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) {
     /* TODO: Your implementation goes here */
-    return 0;
+    enum intr_level old_level = intr_disable();
+    int load_ave_value = fp_to_int_round (mult_mixed (load_avg, 100));
+    intr_set_level(old_level);
+    return load_ave_value;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) {
     /* TODO: Your implementation goes here */
-    return 0;
+    enum intr_level old_level = intr_disable();
+    int recent_cpu = fp_to_int_round (mult_mixed (thread_current() -> recent_cpu, 100));
+    intr_set_level(old_level);
+    return recent_cpu;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -422,9 +450,14 @@ init_thread (struct thread *t, const char *name, int priority) {
     t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
     t->priority = priority;
     t->magic = THREAD_MAGIC;
+    list_push_back(&all_list, &t->allelem);
     t->init_priority = priority;
     t->wait_on_lock = NULL;
     list_init(&t->donations);
+
+    /* advanced */
+    t->nice = NICE_DEFAULT;
+    t->recent_cpu = RECENT_CPU_DEFAULT;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -734,3 +767,141 @@ void refresh_priority(){
     }
 }
 
+/* advance */
+
+
+void mlfqs_calculate_priority(struct thread *t){
+    //priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+    if(t == idle_thread){
+        return;
+    }
+    t->priority = fp_to_int (add_mixed (div_mixed (t->recent_cpu, -4), PRI_MAX - t->nice * 2));
+}
+
+void mlfqs_calculate_recent_cpu(struct thread *t){
+    // recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
+    if(t == idle_thread){
+        return;
+    }
+    t->recent_cpu = add_mixed (mult_fp (div_fp (mult_mixed (load_avg, 2), 
+    add_mixed (mult_mixed (load_avg, 2), 1)), t->recent_cpu), t->nice);
+}
+void mlfqs_calculate_load_avg(void){
+    //load_avg = (59/60) * load_avg + (1/60) * ready_threads
+    int ready_threads;
+
+    if (thread_current () == idle_thread)
+        ready_threads = list_size (&ready_list);
+    else
+        ready_threads = list_size (&ready_list) + 1;
+
+    load_avg = add_fp (mult_fp (div_fp (int_to_fp(59), int_to_fp(60)), load_avg), 
+                    mult_mixed (div_fp (int_to_fp(1), int_to_fp(60)), ready_threads));
+}
+
+void mlfqs_increments_recent_cpu(void){
+    if(thread_current() != idle_thread){
+        thread_current()->recent_cpu = add_mixed (thread_current()->recent_cpu, 1);
+    }
+}
+
+void mlfqs_recalculate_recent_cpu(void){
+    struct list_elem *e;
+    for(e = list_begin(&all_list) ; e != list_end(&all_list); e = list_next(e)){
+        struct thread *t = list_entry(e, struct thread, allelem);
+        mlfqs_calculate_recent_cpu(t);
+    }
+}
+
+void mlfqs_recalculate_priority(void){
+    struct list_elem *e;
+    for(e = list_begin(&all_list) ; e != list_end(&all_list); e = list_next(e)){
+        struct thread *t = list_entry(e, struct thread, allelem);
+        mlfqs_calculate_priority(t);
+    }
+}
+
+int int_to_fp (int n) {
+  return n * F;
+}
+
+int fp_to_int (int x) {
+  return x / F;
+}
+
+int fp_to_int_round (int x) {
+  if (x >= 0) return (x + F / 2) / F;
+  else return (x - F / 2) / F;
+}
+
+int add_fp (int x, int y) {
+  return x + y;
+}
+
+int sub_fp (int x, int y) {
+  return x - y;
+}
+
+int add_mixed (int x, int n) {
+  return x + n * F;
+}
+
+int sub_mixed (int x, int n) {
+  return x - n * F;
+}
+
+int mult_fp (int x, int y) {
+  return ((int64_t) x) * y / F;
+}
+
+int mult_mixed (int x, int n) {
+  return x * n;
+}
+
+int div_fp (int x, int y) {
+  return ((int64_t) x) * F / y;
+}
+
+int div_mixed (int x, int n) {
+  return x / n;
+}
+
+
+
+
+// void update_load_avg_and_recent_cpu(void){
+//     int ready_threads = list_size(&ready_list);
+//     struct thread *t;
+//     struct list_elem *e;
+
+//     //running 상태
+//     if(thread_current() != idle_thread){
+//         ready_threads += 1;
+//     }
+//     //recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
+//     //load_avg = (59/60) * load_avg + (1/60) * ready_threads
+//     load_avg = float_div_int(float_add_int(int_mul_float(59, load_avg), ready_threads), 60);
+//     for(e = list_begin(&ready_list) ; e != list_end(&ready_list); e = list_next(e)){
+//         t = list_entry(e, struct thread, elem);
+//         if(t != idle_thread){
+//             t->recent_cpu = float_add_int(float_mul_float(float_div_float(int_mul_float(2, load_avg), float_add_int(int_mul_float(2, load_avg), 1)), t->recent_cpu), t->nice);
+//         }
+//     }
+// }
+// void update_priority(){
+//     struct thread *t;
+//     struct list_elem *e;
+//     //priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+//     for(e = list_begin(&ready_list) ; e != list_end(&ready_list); e = list_next(e)){
+//         t = list_entry(e, struct thread, elem);
+//         t->priority = float_sub_float(float_sub_float(float_add_int(0, PRI_MAX), float_div_int(t->recent_cpu, 4)), int_mul_float(2, float_add_int(0, t->nice))) / FRACTION;
+//         if(t->priority > PRI_MAX){
+//             t->priority = PRI_MIN;
+//         }else if(t->priority < PRI_MIN){
+//             t->priority = PRI_MIN;
+//         }
+//     }
+//     if(test_max_priority()){
+//         intr_yield_on_return();
+//     }
+// }
