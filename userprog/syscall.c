@@ -87,11 +87,11 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		exit(f->R.rdi);
 		break;
 	case SYS_FORK:
-		// f->R.rax = fork(f->R.rdi, f);
+		f->R.rax = fork(f->R.rdi, f);
 		break;
 	case SYS_EXEC:
-		// if (exec(f->R.rdi) == -1)
-		// 	exit(-1);
+		if (exec(f->R.rdi) == -1)
+			exit(-1);
 		break;
 	case SYS_WAIT:
 		f->R.rax = process_wait(f->R.rdi);
@@ -106,7 +106,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = open(f->R.rdi);
 		break;
 	case SYS_FILESIZE:
-		// f->R.rax = filesize(f->R.rdi);
+		f->R.rax = filesize(f->R.rdi);
 		break;
 	case SYS_READ:
 		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
@@ -115,10 +115,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK:
-		// seek(f->R.rdi, f->R.rsi);
+		seek(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_TELL:
-		// f->R.rax = tell(f->R.rdi);
+		f->R.rax = tell(f->R.rdi);
 		break;
 	case SYS_CLOSE:
 		close(f->R.rdi);
@@ -217,8 +217,9 @@ bool remove(const char *file)
 int open(const char *file)
 {
 	check_address(file);
+	lock_acquire(&file_rw_lock);
 	struct file *fileobj = filesys_open(file);
-
+	
 	if (fileobj == NULL)
 		return -1;
 
@@ -228,7 +229,28 @@ int open(const char *file)
 	if (fd == -1)
 		file_close(fileobj);
 
+	lock_release(&file_rw_lock);
 	return fd;
+}
+
+/* 주어진 파일을 실행한다. */
+int exec (char *file_name){
+	check_address(file_name);
+
+	int siz = strlen(file_name) + 1;
+	char *fn_copy = palloc_get_page(PAL_ZERO);
+	
+	if (fn_copy == NULL)
+		exit(-1);
+	strlcpy(fn_copy, file_name, siz);
+
+	if (process_exec(fn_copy) == -1)
+		return -1;
+
+	// Not reachable
+	NOT_REACHED();
+
+	return 0;
 }
 
 /* 버퍼에 있는 내용을 fd 파일에 작성. 파일에 작성한 바이트 반환 */
@@ -348,4 +370,35 @@ void close(int fd){
 		file_close(fileobj);
 	else
 		fileobj->dupCount--;
+}
+
+/* 파일이 열려있다면 바이트 반환, 없다면 -1 반환 */
+int filesize(int fd)
+{
+	struct file *fileobj = find_file_by_fd(fd);
+	if (fileobj == NULL)
+		return -1;
+	return file_length(fileobj);
+}
+
+void seek(int fd, unsigned position)
+{
+	struct file *fileobj = find_file_by_fd(fd);
+	if (fileobj <= 2)
+		return;
+	fileobj->pos = position;	
+}
+
+/* 파일의 시작점부터 현재 위치까지의 offset을 반환 */
+unsigned tell(int fd)
+{
+	struct file *fileobj = find_file_by_fd(fd);
+	if (fileobj <= 2)
+		return;
+	return file_tell(fileobj);
+}
+
+tid_t fork (const char *thread_name, struct intr_frame *f)
+{
+	return process_fork(thread_name, f);
 }
