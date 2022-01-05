@@ -141,6 +141,9 @@ struct thread {
     struct file **fdTable;
     int fdIdx;
 
+    int stdin_count;
+    int stdout_count;
+
     /* 현재 실행 중인 파일 */
     struct file *running;
 
