@@ -1,6 +1,8 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 
+#include "threads/synch.h"
+
 void syscall_init (void);
 
 /* 파일 사용시 lock하여 상호배제 구현 */
