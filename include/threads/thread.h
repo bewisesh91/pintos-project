@@ -225,5 +225,9 @@ int mult_mixed (int x, int n);
 int div_fp (int x, int y);
 int div_mixed (int x, int n);
 
+/* 파일 디스크립터 상수 */
+#define FDT_PAGES 3
+#define FDCOUNT_LIMIT FDT_PAGES * (1<<9)
+
 #endif /* threads/thread.h */
 
