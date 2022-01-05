@@ -27,6 +27,8 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
+void set_userStack(char **argv, int argc, void **rspp);
+
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
@@ -50,8 +52,10 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
+	char *token,*save_ptr;
+	token = strtok_r(file_name," ",&save_ptr);
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -164,6 +168,7 @@ int
 process_exec (void *f_name) {
 	char *file_name = f_name;
 	bool success;
+	struct thread *cur = thread_current(); // 이거 왜 필요하더라?
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
@@ -176,17 +181,86 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+	/* argument parsing */
+	char *argv[30];
+	int argc = 0;
+
+	char *token, *save_ptr;
+	token = strtok_r(file_name, " ", &save_ptr);
+	while (token != NULL)
+	{
+		/* 공백 기준으로 명령어 나누어 리스트로 조합 */
+		argv[argc] = token;
+		token = strtok_r(NULL, " ", &save_ptr);
+		argc++;
+	}
+	
 	/* And then load the binary */
 	success = load (file_name, &_if);
+	
+	/* If load failed, quit. */
+	if (!success)
+	{
+		palloc_free_page(file_name);
+		return -1;
+	}
+
+	// Project 2-1. Pass args - load arguments onto the user stack
+	void **rspp = &_if.rsp;
+
+	set_userStack(argv, argc, rspp);
+	
+	_if.R.rdi = argc;
+	_if.R.rsi = (uint64_t)*rspp + sizeof(void *);
+
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
-	if (!success)
-		return -1;
 
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
+}
+
+void set_userStack(char **argv, int argc, void **rspp)
+{
+	// 1. Save argument strings (character by character)
+	for (int i = argc - 1; i >= 0; i--)
+	{
+		int N = strlen(argv[i]);
+		for (int j = N; j >= 0; j--)
+		{
+			char individual_character = argv[i][j];
+			(*rspp)--;
+			**(char **)rspp = individual_character; // 1 byte
+		}
+		argv[i] = *(char **)rspp; // push this address too
+	}
+
+	// 2. Word-align padding
+	int pad = (int)*rspp % 8;
+	for (int k = 0; k < pad; k++)
+	{
+		(*rspp)--;
+		**(uint8_t **)rspp = (uint8_t)0; // 1 byte
+	}
+
+	// 3. Pointers to the argument strings
+	size_t PTR_SIZE = sizeof(char *);
+
+	(*rspp) -= PTR_SIZE;
+	**(char ***)rspp = (char *)0;
+
+	for (int i = argc - 1; i >= 0; i--)
+	{
+		(*rspp) -= PTR_SIZE;
+		**(char ***)rspp = argv[i];
+	}
+
+	// 4. Return address
+	(*rspp) -= PTR_SIZE;
+	**(void ***)rspp = (void *)0;
 }
 
 
@@ -204,6 +278,8 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	for(int i = 0 ; i<10000000; i++);
+	
 	return -1;
 }
 
@@ -217,6 +293,8 @@ process_exit (void) {
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
 	process_cleanup ();
+	
+	
 }
 
 /* Free the current process's resources. */
