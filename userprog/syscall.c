@@ -78,6 +78,7 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
+	// printf("syscall! , %d\n",f->R.rax);
 	switch (f->R.rax)
 	{
 	case SYS_HALT:
@@ -124,7 +125,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		close(f->R.rdi);
 		break;
 	case SYS_DUP2:
-		// f->R.rax = dup2(f->R.rdi, f->R.rsi);
+		f->R.rax = dup2(f->R.rdi, f->R.rsi);
 		break;
 	default:
 		exit(-1);
@@ -254,7 +255,7 @@ int exec (char *file_name){
 }
 
 /* 버퍼에 있는 내용을 fd 파일에 작성. 파일에 작성한 바이트 반환 */
-int write(int fd, const void *buffer, unsigned size)
+write(int fd, const void *buffer, unsigned size)
 {
 	check_address(buffer);
 	int ret;
@@ -320,7 +321,7 @@ int read(int fd, void *buffer, unsigned size)
 			int i;
 			unsigned char *buf = buffer;
 			
-			/* 콘솔에 작성된 내용 받아옴 */
+			/* 키보드로 적은(버퍼) 내용 받아옴 */
 			for (i = 0; i < size; i++)
 			{
 				char c = input_getc();
@@ -401,4 +402,31 @@ unsigned tell(int fd)
 tid_t fork (const char *thread_name, struct intr_frame *f)
 {
 	return process_fork(thread_name, f);
+}
+
+int dup2(int oldfd, int newfd){
+	if (oldfd == newfd)
+		return newfd;
+
+	struct file *fileobj = find_file_by_fd(oldfd);
+	if (fileobj == NULL)
+		return -1;
+
+	struct thread *cur = thread_current();
+	struct file **fdt = cur->fdTable;
+
+	// Don't literally copy, but just increase its count and share the same struct file
+	// [syscall close] Only close it when count == 0
+
+	// Copy stdin or stdout to another fd
+	if (fileobj == STDIN)
+		cur->stdin_count++;
+	else if (fileobj == STDOUT)
+		cur->stdout_count++;
+	else
+		fileobj->dupCount++;
+
+	close(newfd);
+	fdt[newfd] = fileobj;
+	return newfd;
 }

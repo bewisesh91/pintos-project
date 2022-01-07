@@ -13,27 +13,75 @@ Boot complete.
 Putting 'fork-multiple' into the file system...
 Executing 'fork-multiple':
 (fork-multiple) begin
-(fork-multiple) child run
-child: exit(4)
-(fork-multiple) Parent: child exit status is 4
-(fork-multiple) child run
-child: exit(5)
-(fork-multiple) Parent: child exit status is 5
-(fork-multiple) child run
-child: exit(6)
-(fork-multiple) Parent: child exit status is 6
-(fork-multiple) child run
-child: exit(7)
-(fork-multiple) Parent: child exit status is 7
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
+(fork-multiple) Parent: child exit status is -1
+(fork-multiple) end
+child: exit(0)
+(fork-multiple) Parent: child exit status is 0
 (fork-multiple) end
 fork-multiple: exit(0)
 Execution of 'fork-multiple' complete.
-Timer: 80 ticks
-Thread: 30 idle ticks, 38 kernel ticks, 13 user ticks
+Timer: 125 ticks
+Thread: 30 idle ticks, 54 kernel ticks, 42 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 87 reads, 236 writes
 hd1:0: 104 reads, 0 writes
-Console: 1225 characters output
+Console: 2824 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...
