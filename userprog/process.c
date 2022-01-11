@@ -320,9 +320,6 @@ process_exec (void *f_name) {
 
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 
-	/* If load failed, quit. */
-	palloc_free_page (file_name);
-
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
